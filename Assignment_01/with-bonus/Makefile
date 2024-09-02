@@ -1,39 +1,15 @@
-#invoke make inside following directories and in this order: loader, launch, fib
 LOADER_DIR := loader
-LAUNCH_DIR := launch
+LAUNCHER_DIR := launcher
 TEST_DIR := test
-
-loader:
+all:
 	$(MAKE) -C $(LOADER_DIR)
-
-launch:
-	$(MAKE) -C $(LAUNCH_DIR)
-
-fib:
+	$(MAKE) -C $(LAUNCHER_DIR)
 	$(MAKE) -C $(TEST_DIR)
-
+clean:
+	cd bin && rm launch lib_simpleloader.so
+	cd loader && rm loader.o
+	cd test && rm fib
+	
+	
 #move the lib_simpleloader.so and launch binaries inside bin directory
-SRC_DIR = .
-DEST_DIR = ./bin
-
-# List of files to move
-FILES = lib_simpleloader.so launch
-
-# Default target
-all: move_files
-
-# Rule to move files
-move_files: $(FILES)
-	@mkdir -p $(DEST_DIR)
-	@mv $(addprefix $(SRC_DIR)/, $^) $(DEST_DIR)
-
-# Clean up the destination directory
-clean:
-	rm -rf $(DEST_DIR)
-
-
 #Provide the command for cleanup
-clean:
-	$(MAKE) -C $(LOADER_DIR) clean
-	$(MAKE) -C $(LAUNCH_DIR) clean
-	$(MAKE) -C $(FIB_DIR) clean

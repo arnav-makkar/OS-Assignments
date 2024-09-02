@@ -69,7 +69,7 @@ void load_and_run_elf(const char* exe) {
     printf("Reached the end of load_and_run_elf\n");
 }
 
-int main(int argc, char** argv) {
+int loader(int argc, char** argv) {
     if (argc != 2) {
         printf("Usage: %s <ELF Executable>\n", argv[0]);
         exit(1);
