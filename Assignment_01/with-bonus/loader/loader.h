@@ -12,5 +12,5 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 
-void load_and_run_elf(char** exe);
+void load_and_run_elf(const char* exe);
 void loader_cleanup();
