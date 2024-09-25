@@ -1,0 +1,24 @@
+https://github.com/arnav-makkar/OS-Assignments/tree/main
+
+Group project by Bhuvan Raju(2023171) and Arnav Makkar(2023127). 
+Group ID: 89
+
+The bonus section as well as all others have been completed.
+
+
+Some commands which will not be supported are mentioned as follows with reasoning:
+
+(a) Change of Directory:
+Commands like cd and exit do not function since execvp() runs external programs, which cannot change the state of the shell itself.
+
+(b) Foreground/Background Management:
+Background commands (denoted with &) cannot be brought back to the foreground since there is no tracking of background processes.
+
+(c) Signal Handling:
+Signals like CTRL+C (interrupt) and CTRL+Z (suspend) are not handled properly, making the shell less interactive and responsive.
+
+(d) Shell Substitution and Expansion:
+Features like variable substitution and command expansion are not implemented, limiting flexibility in command execution.
+
+(e) Background Processes with Pipes:
+Background processes do not work correctly for piped commands, as the shell only manages simple background command execution.
