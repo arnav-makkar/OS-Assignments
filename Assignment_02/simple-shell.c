@@ -2,7 +2,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <time.h>
 #include <sys/wait.h>
 #include <stdbool.h>
 #include <signal.h>
@@ -32,7 +31,7 @@ int execute_command(char* command, bool bg_cmd){
             args[i++] = token;
             token = strtok(NULL, " ");
         }
-        args[i] = NULL; // Null-terminate the arguments array
+        args[i] = NULL;
 
         if(execvp(args[0], args) == -1){
             perror("Execution failed\n");
@@ -53,8 +52,7 @@ int execute_command(char* command, bool bg_cmd){
                 int statusCode = WEXITSTATUS(status);
 
                 if(statusCode != 0){
-                    perror("Failure occured during execution\n");
-                    exit(1);
+                    printf("Command failed with status code: %d\n", statusCode);
                 }
             }
         }
@@ -68,73 +66,61 @@ int execute_command(char* command, bool bg_cmd){
     return 1;
 }
 
-int execute_piped_commands(char* cmd1, char* cmd2){
+int execute_piped_commands(char* commands[], int cmd_num){
     int fd[2];
     // fd[0]: read
     // fd[1]: write
 
-    if (pipe(fd) == -1) {
-        perror("Pipe failed");
-        exit(1);
-    }
+    int input_fd = 0; // 0 for stdin
 
-    int id1 = fork();
-    if (id1 < 0){
-        perror("Fork failed");
-        exit(1);
-    }
-    else if (id1 == 0) {
-        // cmd1
-        dup2(fd[1], STDOUT_FILENO); // stdout -> write end
-        close(fd[0]);
-        close(fd[1]);
-
-        char *args1[BUFFER_SIZE];
-        char *token = strtok(cmd1, " ");
-        int i = 0;
-        while (token != NULL) {
-            args1[i++] = token;
-            token = strtok(NULL, " ");
-        }
-        args1[i] = NULL;
-
-        if (execvp(args1[0], args1) == -1) {
-            perror("Failure occured during execution of cmd1");
+    for (int i = 0; i <cmd_num; i++) {
+        if (pipe(fd) == -1) {
+            perror("Pipe failed");
             exit(1);
         }
-    }
 
-    int id2 = fork();
-    if (id2 < 0) {
-        perror("Fork failed");
-        exit(1);
-    }
-    else if (id2 == 0) {
-        // cmd2
-        dup2(fd[0], STDIN_FILENO); // stdin -> read end
-        close(fd[1]);
-        close(fd[0]);
-        
-        
-        char *args2[BUFFER_SIZE];
-        char *token = strtok(cmd2, " ");
-        int i = 0;
-        while (token != NULL) {
-            args2[i++] = token;
-            token = strtok(NULL, " ");
-        }
-        args2[i] = NULL;
-
-        if (execvp(args2[0], args2) == -1) {
-            perror("Failure occured during execution of cmd2");
+        int id = fork();
+        if(id < 0){
+            perror("Fork failed");
             exit(1);
         }
-    }
 
-    close(fd[0]);
-    close(fd[1]);
-    waitpid(id1, NULL, 0);
-    waitpid(id2, NULL, 0);
+        else if (id == 0){
+            // child process
+
+            dup2(input_fd, STDIN_FILENO);   // read from the previous pipe/stdin(for first cmd)
+            
+            if (i < cmd_num-1){
+                dup2(fd[1], STDOUT_FILENO);  // stdout -> write end
+            }
+
+            close(fd[0]);
+            close(fd[1]);
+
+            char *args[BUFFER_SIZE];
+            char *token = strtok(commands[i], " ");
+
+            int j = 0;
+            while(token != NULL){
+                args[j++] = token;
+                token = strtok(NULL, " ");
+            }
+            args[j] = NULL;
+
+            if(execvp(args[0], args) == -1){
+                perror("Execution failed");
+                exit(1);
+            }
+        }
+
+        else{
+            // parent process
+
+            waitpid(id, NULL, 0);
+            close(fd[1]);
+            input_fd = fd[0];  // this pipe's read end becomes the input for the next cmd
+        }
+    }
 
     return 1;
 }
@@ -151,6 +137,8 @@ bool check_if_bg(char *command) {
 }
 
 int main(int argc, char* argv[]){
+
+    system("clear");
 
     while(true){
 
@@ -178,22 +166,24 @@ int main(int argc, char* argv[]){
             continue;
         }
 
-        char *pipe_ind = strchr(user_input, '|');
+        char *cmd_list[BUFFER_SIZE];
+        int cmd_num = 0;
 
-        if(pipe_ind != NULL){
-            *pipe_ind = '\0';
+        char *token = strtok(user_input, "|");
+        while (token != NULL) {
+            cmd_list[cmd_num++] = token;
+            token = strtok(NULL, "|");
+        }
 
-            char *cmd1 = user_input;
-            char *cmd2 = pipe_ind + 1;
-
-            execute_piped_commands(cmd1, cmd2);
+        if(cmd_num > 1){
+            execute_piped_commands(cmd_list, cmd_num);
         }
 
         else{
             bool bg_cmd = check_if_bg(user_input);
-
             execute_command(user_input, bg_cmd);
         }
+
     }
 
     for (int i = 0; i<history_count; i++) {
@@ -202,23 +192,3 @@ int main(int argc, char* argv[]){
 
     return 0;
 }
-
-/*
-Sample input:
-
-ls
-ls /home
-echo you should be aware of the plagiarism policy
-wc -l fib.c
-wc -c fib.c
-grep printf helloworld.c
-ls -R
-ls -l
-./fib 40
-./helloworld
-sort fib.c
-uniq file.txt
-cat fib.c | wc -l
-cat helloworld.c | grep print | wc -l
-
-*/
