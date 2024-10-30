@@ -17,9 +17,7 @@ typedef struct {
     char *command;
     int pid;
     struct timeval start_time;
-    struct timeval end_time;
     long duration;
-    long wait_time;
     char output[OUTPUT_SIZE]; // Store the output of the command
 } command_info;
 
@@ -28,7 +26,7 @@ int history_count = 0;
 int NCPU = 1; // Number of CPU cores
 int TSLICE = 1000; // Time slice in milliseconds
 int ready_queue[HISTORY_SIZE];
-int queue_count = 0;//number if ekements
+int queue_count = 0;
 bool running = true;
 bool ctrl_c_received = false;
 
@@ -39,10 +37,9 @@ void display_command_info() {
         printf("Command: %s\n", command_history[i].command);
         printf("PID: %d\n", command_history[i].pid);
         printf("Start time: %ld.%06ld\n", (long)command_history[i].start_time.tv_sec, (long)command_history[i].start_time.tv_usec);
-        printf("Completion time: %ld.%06ld\n", (long)command_history[i].end_time.tv_sec, (long)command_history[i].end_time.tv_usec);
-        printf("Wait time: %ld ms\n", command_history[i].duration);
-        //printf("Wait time: %ld ms\n", command_history[i].wait_time);
-        printf("Output:%s\n", command_history[i].output);
+        printf("Duration: %ld ms\n", command_history[i].duration);
+        printf("Wait time: %ld ms\n", command_history[i].duration); // Here wait time is the same as duration
+        printf("Output:\n%s\n", command_history[i].output);
         printf("------------------------\n");
         free(command_history[i].command); // Free allocated memory
     }
@@ -65,7 +62,6 @@ void sigchld_handler(int sig_num) {
             if (command_history[i].pid == pid) {
                 struct timeval end;
                 gettimeofday(&end, NULL);
-                command_history[i].end_time = end;
                 command_history[i].duration = (end.tv_sec - command_history[i].start_time.tv_sec) * 1000 + (end.tv_usec - command_history[i].start_time.tv_usec) / 1000;
 
                 // Read output from the pipe
@@ -95,8 +91,7 @@ void execute_command(char *command) {
     if (id < 0) {
         perror("Error during fork\n");
         exit(1);
-    }
-    else if (id == 0) {
+    } else if (id == 0) {
         close(output_pipe[0]); // Close read end of the pipe in the child
         dup2(output_pipe[1], STDOUT_FILENO); // Redirect stdout to the pipe
         dup2(output_pipe[1], STDERR_FILENO); // Redirect stderr to the pipe
@@ -115,40 +110,40 @@ void execute_command(char *command) {
             perror("Execution failed\n");
             exit(1);
         }
-    }
-    else {
+    } else {
         close(output_pipe[1]); // Close write end of the pipe in the parent
 
         command_history[history_count].pid = id;
         command_history[history_count].command = strdup(command);
         gettimeofday(&command_history[history_count].start_time, NULL);
         command_history[history_count].duration = -1;
-        command_history[history_count].wait_time = 0;
         ready_queue[queue_count++] = id;
         command_history[history_count].output[0] = output_pipe[0];
         history_count++;
     }
 }
+
+// Function for scheduling processes
 void scheduler(int signum) {
     if (!running) return;
 
-    int executing_count = NCPU; // Number of processes to execute at once
-
-    // Send SIGCONT to the first NCPU processes in the queue to allow them to execute
-    for (int i = 0; i < executing_count && i < queue_count; i++) {
+    for (int i = 0; i < NCPU && i < queue_count; i++) {
         kill(ready_queue[i], SIGCONT);
     }
-
-    // Pause the remaining processes
-    for (int i = executing_count; i < queue_count; i++) {
+    usleep(TSLICE * 1000);
+    for (int i = 0; i < NCPU && i < queue_count; i++) {
         kill(ready_queue[i], SIGSTOP);
     }
 
-    usleep(TSLICE * 1000);  // Time slice wait
-
-    // Scheduler will maintain the same set of executing/paused processes on each signal
+    for (int i = 0; i < NCPU && i < queue_count; i++) {
+        int pid = ready_queue[i];
+        for (int j = 0; j < queue_count - 1; j++) {
+            ready_queue[j] = ready_queue[j + 1];
+        }
+        ready_queue[queue_count - 1] = pid;
+    }
     if (running) {
-        alarm(TSLICE / 1000);  // Trigger the next scheduling interval
+        alarm(TSLICE / 1000);
     }
 }
 
@@ -159,7 +154,6 @@ void wait_for_all_processes() {
             waitpid(command_history[i].pid, NULL, 0);
             struct timeval end;
             gettimeofday(&end, NULL);
-            command_history[i].end_time = end;
             command_history[i].duration = (end.tv_sec - command_history[i].start_time.tv_sec) * 1000 + (end.tv_usec - command_history[i].start_time.tv_usec) / 1000;
 
             // Read output from the pipe for any remaining data
@@ -202,8 +196,7 @@ int main(int argc, char *argv[]) {
                 printf("%d: %s\n", i + 1, command_history[i].command);
             }
             continue;
-        }
-        else if (strncmp(user_input, "submit ", 7) == 0) {
+        } else if (strncmp(user_input, "submit ", 7) == 0) {
             execute_command(user_input + 7);
         }
     }

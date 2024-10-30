@@ -1,16 +1,23 @@
 #ifndef DUMMY_MAIN_H
 #define DUMMY_MAIN_H
-
+#include <signal.h>
+#include <unistd.h>
+// Define dummy_main function signature
 int dummy_main(int argc, char **argv);
 
-int main(int argc, char **argv) {
-    /* You can add any code here you want to support your SimpleScheduler implementation */
-    pause();  // Wait until SimpleScheduler sends SIGCONT to continue
+// Redefine main to dummy_main
+#define main dummy_main
 
+// New main definition to support SimpleScheduler
+int main(int argc, char **argv) {
+    // Custom code to support scheduling:
+    signal(SIGCONT, SIG_DFL);  // Ensure SIGCONT resumes execution
+    pause();  // Wait until SIGCONT to start
+
+    // Call the actual program’s main function, now renamed to dummy_main
     int ret = dummy_main(argc, argv);
     return ret;
 }
 
-#define main dummy_main
-
 #endif // DUMMY_MAIN_H
+
