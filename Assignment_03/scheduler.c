@@ -30,7 +30,7 @@ int TSLICE = 1000; // Time slice in milliseconds
 int ready_queue[HISTORY_SIZE];
 int queue_count = 0;//number if ekements
 bool running = true;
-bool ctrl_c_received = false;
+bool ctrl_c_flag = false;
 
 // Function to display command information
 void display_command_info() {
@@ -48,18 +48,16 @@ void display_command_info() {
     }
 }
 
-// Signal handler for Ctrl+C (SIGINT)
+// Signal handler for SIGINT
 void sigint_handler(int sig_num) {
-    ctrl_c_received = true;
+    ctrl_c_flag = true;
     running = false;
 }
 
-// Signal handler for child process termination (SIGCHLD)
+// Signal handler for child process termination
 void sigchld_handler(int sig_num) {
     int status;
     pid_t pid;
-
-    // Loop to handle multiple child process terminations
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         for (int i = 0; i < history_count; i++) {
             if (command_history[i].pid == pid) {
@@ -83,7 +81,7 @@ void sigchld_handler(int sig_num) {
     }
 }
 
-// Function to execute a command
+// function to execute a command
 void execute_command(char *command) {
     int output_pipe[2];
     if (pipe(output_pipe) == -1) {
@@ -110,7 +108,7 @@ void execute_command(char *command) {
             token = strtok(NULL, " ");
         }
         args[i] = NULL;
-        pause(); // Wait for signal from SimpleScheduler
+        pause(); // wait for signal from SimpleScheduler
         if (execvp(args[0], args) == -1) {
             perror("Execution failed\n");
             exit(1);
@@ -134,7 +132,7 @@ void scheduler(int signum) {
 
     int executing_count = NCPU; // Number of processes to execute at once
 
-    // Send SIGCONT to the first NCPU processes in the queue to allow them to execute
+    // sending SIGCONT to the first NCPU processes in the queue
     for (int i = 0; i < executing_count && i < queue_count; i++) {
         kill(ready_queue[i], SIGCONT);
     }
@@ -145,8 +143,6 @@ void scheduler(int signum) {
     }
 
     usleep(TSLICE * 1000);  // Time slice wait
-
-    // Scheduler will maintain the same set of executing/paused processes on each signal
     if (running) {
         alarm(TSLICE / 1000);  // Trigger the next scheduling interval
     }
@@ -210,7 +206,7 @@ int main(int argc, char *argv[]) {
 
     wait_for_all_processes();
 
-    if (ctrl_c_received) {
+    if (ctrl_c_flag) {
         display_command_info();
     }
 
