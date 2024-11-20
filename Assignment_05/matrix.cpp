@@ -4,28 +4,25 @@
 #include <time.h>
 
 struct ThreadArg {
-    int s_row;
-    int s_col;
-    int e_row;
-    int e_col;
+	int start;
+	int end;
+	int cols;
 	std::function<void(int)> func1;
     std::function<void(int, int)> func2;
 };
 
 void* thread_func1(void* arg) {
-    ThreadArg* threadArg = static_cast<ThreadArg*>(arg);
-    for (int i = threadArg->s_row; i < threadArg->e_row; i++) {
+    ThreadArg* threadArg = (ThreadArg*)(arg);
+    for (int i = threadArg->start; i < threadArg->end; i++) {
         threadArg->func1(i);
     }
     return NULL;
 }
 
 void* thread_func2(void* arg) {
-    ThreadArg* threadArg = static_cast<ThreadArg*>(arg);
-    for (int i = threadArg->s_row; i < threadArg->e_row; i++) {
-        for (int j = threadArg->s_col; j < threadArg->e_col; j++) {
-            threadArg->func2(i, j);
-        }
+    ThreadArg* threadArg = (ThreadArg*)(arg);
+    for (int i = threadArg->start; i <= threadArg->end; i++) {
+        threadArg->func2(i/threadArg->cols, i%threadArg->cols);
     }
     return NULL;
 }
@@ -41,19 +38,11 @@ void parallel_for_2D(int s1, int e1, int s2, int e2, std::function<void(int, int
 
     for (int i = 0; i < numThread; ++i) {
         int start = i * chunkSize;
-        int end = std::min(start + chunkSize, totalSize);
+        int end = std::min(start + chunkSize-1, totalSize-1);
 
-        // Calculate the starting and ending row/column for this thread
-        args[i].s_row = (s1 + start) / cols;
-        args[i].s_col = (s2 + start) % cols;
-        args[i].e_row = (s1 + end) / cols;
-        args[i].e_col = (s2 + end) % cols;
-
-        // Adjust for boundaries
-        if (args[i].e_col == s2) {
-            args[i].e_row--;
-            args[i].e_col = e2;
-        }
+		args[i].start = start;
+		args[i].end = end;
+		args[i].cols = cols;
 
         args[i].func2 = func;
         pthread_create(&threads[i], NULL, thread_func2, &args[i]);
@@ -64,7 +53,6 @@ void parallel_for_2D(int s1, int e1, int s2, int e2, std::function<void(int, int
     }
 }
 
-
 void parallel_for_1D(int start, int end, std::function<void(int)> func, int numThread) {
     int totalSize = end - start;
     int chunkSize = (totalSize + numThread - 1) / numThread;
@@ -73,8 +61,8 @@ void parallel_for_1D(int start, int end, std::function<void(int)> func, int numT
     ThreadArg args[numThread];
 
     for (int i = 0; i < numThread; ++i) {
-        args[i].s_row = start + i * chunkSize;
-        args[i].e_row = std::min(start + (i + 1) * chunkSize, end);
+        args[i].start = start + i * chunkSize;
+        args[i].end = std::min(start + (i + 1) * chunkSize, end);
         args[i].func1 = func;
         pthread_create(&threads[i], NULL, thread_func1, &args[i]);
     }

@@ -1,0 +1,6 @@
+Group project by Bhuvan Raju(2023171) and Arnav Makkar(2023127). 
+Group ID: 89
+
+Both, vector.cpp and matrix.cpp files have been completed.
+
+Both teamates contributed equally to the code and collaborated over google meet calls.
