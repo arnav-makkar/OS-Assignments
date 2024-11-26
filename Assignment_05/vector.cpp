@@ -2,7 +2,36 @@
 #include <assert.h>
 #include <pthread.h>
 #include <time.h>
+#include <sys/mman.h>
 
+// Linked list structure to store results
+struct ListNode {
+    int* data;
+    int size;
+    ListNode* next;
+};
+
+// Utility function to create a new node
+ListNode* create_node(int* data, int size) {
+    ListNode* node = new ListNode;
+    node->data = data;
+    node->size = size;
+    node->next = nullptr;
+    return node;
+}
+
+// Function to append a node to the linked list
+void append_node(ListNode*& head, ListNode* newNode) {
+    if (!head) {
+        head = newNode;
+    } else {
+        ListNode* temp = head;
+        while (temp->next) temp = temp->next;
+        temp->next = newNode;
+    }
+}
+
+// Thread argument structure
 typedef struct {
     int start;
     int end;
@@ -43,15 +72,22 @@ int main(int argc, char** argv) {
     int numThread = argc > 1 ? atoi(argv[1]) : 2;
     int size = argc > 2 ? atoi(argv[2]) : 48000000;
 
-    // Allocate vectors
-    int* A = new int[size];
-    int* B = new int[size];
-    int* C = new int[size];
+    // Allocate vectors using mmap
+    int* A = (int*)mmap(NULL, size * sizeof(int), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    int* B = (int*)mmap(NULL, size * sizeof(int), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    int* C = (int*)mmap(NULL, size * sizeof(int), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (A == MAP_FAILED || B == MAP_FAILED || C == MAP_FAILED) {
+        perror("mmap failed");
+        exit(EXIT_FAILURE);
+    }
 
     // Initialize the vectors
     std::fill(A, A + size, 1);
     std::fill(B, B + size, 1);
     std::fill(C, C + size, 0);
+
+    // Linked list head for results
+    ListNode* resultList = nullptr;
 
     clock_t startTime = clock();
 
@@ -64,15 +100,26 @@ int main(int argc, char** argv) {
     double execTime = (double)(endTime - startTime) / CLOCKS_PER_SEC;
     printf("Execution Time: %.6f seconds\n", execTime);
 
+    // Append results to linked list
+    ListNode* resultNode = create_node(C, size);
+    append_node(resultList, resultNode);
+
     // Verify the result vector
     for (int i = 0; i < size; i++) assert(C[i] == 2);
 
     printf("Test Success\n");
 
     // Cleanup memory
-    delete[] A;
-    delete[] B;
-    delete[] C;
+    munmap(A, size * sizeof(int));
+    munmap(B, size * sizeof(int));
+    munmap(C, size * sizeof(int));
+
+    // Cleanup linked list
+    while (resultList) {
+        ListNode* temp = resultList;
+        resultList = resultList->next;
+        delete temp;
+    }
 
     return 0;
 }
