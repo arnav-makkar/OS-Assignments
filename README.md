@@ -1,1 +1,1 @@
-Course Assignments for the Operating Systems Course, Monsoon'24
+Course Assignments for Operating Systems (CSE231), Monsoon'24
